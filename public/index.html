@@ -64,6 +64,19 @@
     box-shadow:0 6px 16px color-mix(in srgb,var(--a1) 40%,transparent)}
   .send:disabled{opacity:.5;cursor:not-allowed}
   button:focus-visible{outline:2px solid var(--a1);outline-offset:2px}
+  .att{display:flex;gap:8px;flex-wrap:wrap;padding:0 20px}
+  .att:empty{display:none}
+  .pill{display:flex;align-items:center;gap:6px;background:var(--chip);border:1px solid var(--line);border-radius:12px;padding:4px 8px;font-size:.8rem;max-width:200px}
+  .pill img{width:30px;height:30px;object-fit:cover;border-radius:6px}
+  .pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pill button{background:none;border:0;color:var(--muted);font-size:1rem;line-height:1;padding:0 2px}
+  .icon{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--chip);color:var(--ink);font-size:18px;flex:none}
+  .icon.on{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;border-color:transparent}
+  .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .thumbs img{max-width:120px;max-height:120px;border-radius:10px;object-fit:cover}
+  .thumbs .file{background:rgba(255,255,255,.2);border-radius:8px;padding:2px 8px;font-size:.78rem}
+  .gen{max-width:100%;border-radius:14px;display:block}
+  .hide{display:none!important}
   @media (max-width:560px){ .msg{max-width:86%} header,.bar,#log,form{padding-left:14px;padding-right:14px} }
 </style>
 </head>
@@ -77,9 +90,14 @@
   <div class="bar">
     <label class="field"><span>Nama</span><input id="name" maxlength="40" placeholder="Nama kamu" autocomplete="given-name"></label>
     <label class="field"><span>Model</span><select id="model"><option value="auto-FREE">auto-FREE</option></select></label>
+    <label class="field hide" id="sizeBox"><span>Ukuran gambar</span><select id="size"></select></label>
   </div>
   <main id="log" aria-live="polite"></main>
+  <div class="att" id="att"></div>
   <form id="form">
+    <input type="file" id="file" class="hide" multiple accept="image/*,.txt,.md,.csv,.json,.js,.ts,.py,.html,.css,.java,.php,.sql,.xml,.log">
+    <button class="icon" id="attach" type="button" aria-label="Lampirkan file atau gambar" title="Lampirkan file atau gambar">📎</button>
+    <button class="icon hide" id="imgmode" type="button" aria-label="Mode buat gambar" title="Mode buat gambar">🎨</button>
     <textarea id="input" rows="1" placeholder="Tulis pesan…" aria-label="Pesan"></textarea>
     <button class="send" id="send" type="submit" aria-label="Kirim">➤</button>
   </form>
@@ -88,6 +106,10 @@
   const $ = (id) => document.getElementById(id);
   const log = $("log"), input = $("input"), send = $("send"), nameEl = $("name"), modelSel = $("model"), sub = $("sub");
   let history = [];
+  let pending = [];
+  let imageMode = false;
+  const MAX_ATT = 3;
+  const TEXT_LIMIT = 24000;
 
   function store(k, v){ try{ if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }catch(e){ return null; } }
   nameEl.value = store("ai_name") || "";
@@ -107,45 +129,173 @@
     log.appendChild(h);
   }
 
-  function add(role, text, html){
+  function add(role, text, html, atts){
     const hero = log.querySelector(".hero"); if (hero) hero.remove();
     const row = document.createElement("div"); row.className = "row " + role;
     const av = document.createElement("div"); av.className = "av";
     av.textContent = role === "user" ? ((nameEl.value.trim()[0] || "K").toUpperCase()) : "✦";
     const m = document.createElement("div"); m.className = "msg";
     if (html) m.innerHTML = html; else m.textContent = text;
+    if (atts && atts.length){
+      const t = document.createElement("div"); t.className = "thumbs";
+      atts.forEach(a => {
+        if (a.kind === "image"){ const i = document.createElement("img"); i.src = a.dataUrl; i.alt = a.name; t.appendChild(i); }
+        else { const f = document.createElement("span"); f.className = "file"; f.textContent = "📄 " + a.name; t.appendChild(f); }
+      });
+      m.appendChild(t);
+    }
     row.append(av, m); log.appendChild(row);
     log.scrollTop = log.scrollHeight;
     return row;
   }
 
+  // ---------- Lampiran ----------
+  function renderAtt(){
+    const box = $("att"); box.innerHTML = "";
+    pending.forEach((a, i) => {
+      const p = document.createElement("div"); p.className = "pill";
+      if (a.kind === "image"){ const im = document.createElement("img"); im.src = a.dataUrl; im.alt = ""; p.appendChild(im); }
+      const sp = document.createElement("span"); sp.textContent = (a.kind === "image" ? "" : "📄 ") + a.name; p.appendChild(sp);
+      const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", "Hapus lampiran");
+      x.onclick = () => { pending.splice(i, 1); renderAtt(); };
+      p.appendChild(x); box.appendChild(p);
+    });
+  }
+
+  function shrinkImage(file){
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const max = 1024, k = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Gambar tidak bisa dibaca.")); };
+      img.src = url;
+    });
+  }
+
+  async function addFiles(files){
+    const notes = [];
+    for (const f of files){
+      if (pending.length >= MAX_ATT){ notes.push("Maksimal " + MAX_ATT + " lampiran."); break; }
+      try {
+        if (f.type.startsWith("image/")){
+          pending.push({ kind: "image", name: f.name, dataUrl: await shrinkImage(f) });
+        } else if (f.size <= 2 * 1024 * 1024 && /\.(txt|md|csv|json|js|ts|py|html|css|java|php|sql|xml|log)$/i.test(f.name)){
+          let t = await f.text();
+          if (t.length > TEXT_LIMIT) t = t.slice(0, TEXT_LIMIT) + "\n…(dipotong)";
+          pending.push({ kind: "text", name: f.name, text: t });
+        } else {
+          notes.push(f.name + ": format belum didukung (pakai gambar atau file teks/kode, maks 2 MB).");
+        }
+      } catch (e) { notes.push(f.name + ": " + e.message); }
+    }
+    renderAtt();
+    if (notes.length) add("ai", "", null).classList.replace("ai", "err"), log.lastChild.querySelector(".msg").textContent = notes.join("\n");
+  }
+
+  $("attach").addEventListener("click", () => $("file").click());
+  $("file").addEventListener("change", async (e) => { await addFiles([...e.target.files]); e.target.value = ""; });
+
+  // ---------- Kirim ----------
+  function buildContent(text, atts){
+    let body = text;
+    atts.filter(a => a.kind === "text").forEach(a => { body += "\n\n[File: " + a.name + "]\n" + a.text; });
+    const imgs = atts.filter(a => a.kind === "image");
+    if (!imgs.length) return body;
+    return [{ type: "text", text: body || "Jelaskan gambar ini." }, ...imgs.map(a => ({ type: "image_url", image_url: { url: a.dataUrl } }))];
+  }
+
+  function forRequest(){
+    // Gambar hanya dikirim pada pesan terakhir supaya permintaan tidak membengkak.
+    return history.map((m, i) => {
+      if (Array.isArray(m.content) && i !== history.length - 1){
+        const t = m.content.filter(p => p.type === "text").map(p => p.text).join("\n");
+        return { role: m.role, content: t + "\n[gambar dilampirkan sebelumnya]" };
+      }
+      return m;
+    });
+  }
+
   async function ask(){
     const text = input.value.trim();
-    if (!text) return;
+    if (!text && !pending.length) return;
+    if (imageMode) return makeImage(text);
+    const atts = pending; pending = []; renderAtt();
     input.value = ""; input.style.height = "auto";
-    history.push({ role: "user", content: text });
-    add("user", text);
-    const pending = add("ai", "", '<span class="dots"><span></span><span></span><span></span></span>');
+    history.push({ role: "user", content: buildContent(text, atts) });
+    add("user", text, null, atts);
+    const row = add("ai", "", '<span class="dots"><span></span><span></span><span></span></span>');
     send.disabled = true;
     try {
       const r = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, model: modelSel.value, name: nameEl.value.trim() })
+        body: JSON.stringify({ messages: forRequest(), model: modelSel.value, name: nameEl.value.trim() })
       });
-      const data = await r.json();
+      const data = await r.json().catch(() => ({ error: "Server tidak membalas dengan benar (cek file api/ di Vercel)." }));
       if (!r.ok) throw new Error(data.error || "Terjadi kesalahan.");
       const reply = data.reply || "(jawaban kosong)";
-      pending.querySelector(".msg").textContent = reply;
+      row.querySelector(".msg").textContent = reply;
       history.push({ role: "assistant", content: reply });
     } catch (e) {
-      pending.classList.replace("ai", "err");
-      pending.querySelector(".msg").textContent = e.message + " Coba kirim ulang atau ganti model.";
+      row.classList.replace("ai", "err");
+      row.querySelector(".msg").textContent = e.message + " Coba kirim ulang atau ganti model.";
       history.pop();
     } finally {
       send.disabled = false; input.focus(); log.scrollTop = log.scrollHeight;
     }
   }
+
+  // ---------- Buat gambar (opsional) ----------
+  async function makeImage(prompt){
+    if (!prompt) return;
+    input.value = ""; input.style.height = "auto";
+    add("user", prompt);
+    const row = add("ai", "", '<span class="dots"><span></span><span></span><span></span></span>');
+    send.disabled = true;
+    try {
+      const r = await fetch("/api/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, size: $("size").value })
+      });
+      const data = await r.json().catch(() => ({ error: "Server tidak membalas dengan benar." }));
+      if (!r.ok) throw new Error(data.error || "Gagal membuat gambar.");
+      const src = data.b64 ? "data:image/png;base64," + data.b64 : (/^https:\/\//.test(data.url || "") ? data.url : "");
+      if (!src) throw new Error("Tidak ada gambar yang dikembalikan.");
+      const m = row.querySelector(".msg"); m.textContent = "";
+      const img = document.createElement("img"); img.className = "gen"; img.src = src; img.alt = prompt;
+      const dl = document.createElement("a"); dl.href = src; dl.download = "gambar.png"; dl.target = "_blank"; dl.rel = "noopener";
+      dl.textContent = "Buka / unduh gambar"; dl.style.cssText = "display:inline-block;margin-top:8px;font-size:.85rem;color:var(--a1)";
+      m.append(img, dl);
+    } catch (e) {
+      row.classList.replace("ai", "err");
+      row.querySelector(".msg").textContent = e.message;
+    } finally {
+      send.disabled = false; input.focus(); log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  fetch("/api/image").then(r => r.json()).then(d => {
+    if (!d.enabled) return;
+    $("imgmode").classList.remove("hide");
+    d.sizes.forEach(z => { const o = document.createElement("option"); o.value = z; o.textContent = z; $("size").appendChild(o); });
+    $("size").value = "1024x1024";
+  }).catch(() => {});
+
+  $("imgmode").addEventListener("click", () => {
+    imageMode = !imageMode;
+    $("imgmode").classList.toggle("on", imageMode);
+    $("sizeBox").classList.toggle("hide", !imageMode);
+    input.placeholder = imageMode ? "Deskripsikan gambar yang ingin dibuat…" : "Tulis pesan…";
+  });
 
   fetch("/api/models").then(r => r.json()).then(d => {
     if (!d.models || !d.models.length) return;
@@ -167,6 +317,13 @@
   nameEl.addEventListener("input", () => { store("ai_name", nameEl.value); if (log.querySelector(".hero")) hero(); });
   $("form").addEventListener("submit", (e) => { e.preventDefault(); ask(); });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); ask(); } });
+  input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; });
+  $("reset").addEventListener("click", () => { history = []; pending = []; renderAtt(); hero(); });
+  sub.textContent = "Model: " + modelSel.value;
+  hero();
+</script>
+</body>
+</html>("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); ask(); } });
   input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; });
   $("reset").addEventListener("click", () => { history = []; hero(); });
   sub.textContent = "Model: " + modelSel.value;
