@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tanya AI</title>
+<style>
+  :root{
+    --bg1:#f3f0ff; --bg2:#e6f4ff; --card:rgba(255,255,255,.78); --ink:#1a1f3d; --muted:#6b7194;
+    --line:rgba(120,110,200,.18); --ai:#ffffff; --a1:#6d5efc; --a2:#a05cff; --chip:#f0edff;
+    --shadow:0 20px 60px rgba(90,70,200,.14); --err:#d4493f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg1:#12122b; --bg2:#0e1a2e; --card:rgba(28,30,64,.72); --ink:#ecebff; --muted:#9a9fcd;
+      --line:rgba(150,140,255,.2); --ai:#262a58; --a1:#7f72ff; --a2:#b27bff; --chip:#2a2e60;
+      --shadow:0 20px 60px rgba(0,0,0,.45); }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(900px 500px at 10% -10%,color-mix(in srgb,var(--a1) 22%,transparent),transparent),
+               radial-gradient(800px 500px at 100% 0%,color-mix(in srgb,var(--a2) 18%,transparent),transparent),
+               linear-gradient(160deg,var(--bg1),var(--bg2));
+    background-attachment:fixed;display:flex;justify-content:center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))}
+  .app{width:100%;max-width:860px;height:100%;display:flex;flex-direction:column;background:var(--card);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow);overflow:hidden}
+  header{padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)}
+  .logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:20px;
+    background:linear-gradient(135deg,var(--a1),var(--a2));box-shadow:0 6px 16px color-mix(in srgb,var(--a1) 40%,transparent)}
+  .ttl{flex:1;min-width:0}
+  h1{font-size:1.1rem;margin:0;letter-spacing:-.01em}
+  .sub{font-size:.78rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar{display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .field{display:flex;align-items:center;gap:8px;background:var(--chip);border-radius:12px;padding:0 12px;flex:1;min-width:170px}
+  .field span{font-size:.75rem;color:var(--muted);white-space:nowrap}
+  .field input,.field select{flex:1;min-width:0;background:transparent;border:0;color:var(--ink);font:inherit;font-size:.9rem;padding:10px 0;outline:none}
+  .field select option,.field select optgroup{background:var(--ai);color:var(--ink)}
+  button{font:inherit;cursor:pointer}
+  .ghost{background:var(--chip);color:var(--ink);border:0;border-radius:12px;padding:0 14px;font-size:.88rem}
+  #log{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
+  .hero{margin:auto;text-align:center;max-width:460px}
+  .hero .logo{margin:0 auto 14px;width:56px;height:56px;font-size:28px;border-radius:18px}
+  .hero h2{margin:0 0 6px;font-size:1.5rem;letter-spacing:-.02em}
+  .hero p{margin:0 0 18px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+  .chips button{background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:.85rem}
+  .chips button:hover{border-color:var(--a1)}
+  .row{display:flex;gap:10px;align-items:flex-end;max-width:100%}
+  .row.user{flex-direction:row-reverse}
+  .av{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;font-weight:700;color:#fff;
+    background:linear-gradient(135deg,var(--a1),var(--a2))}
+  .row.user .av{background:var(--muted)}
+  .msg{max-width:min(78%,640px);padding:10px 14px;border-radius:18px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .ai .msg{background:var(--ai);border:1px solid var(--line);border-bottom-left-radius:6px}
+  .user .msg{color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2));border-bottom-right-radius:6px}
+  .err .msg{background:transparent;border:1px dashed var(--err);color:var(--err)}
+  .dots span{display:inline-block;width:7px;height:7px;margin:0 2px;border-radius:50%;background:var(--muted);animation:b 1s infinite}
+  .dots span:nth-child(2){animation-delay:.15s}.dots span:nth-child(3){animation-delay:.3s}
+  @keyframes b{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-5px);opacity:1}}
+  form{display:flex;gap:10px;padding:14px 20px 18px;border-top:1px solid var(--line);align-items:flex-end}
+  textarea{flex:1;resize:none;max-height:140px;background:var(--ai);color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:12px 16px;font:inherit}
+  textarea:focus{outline:2px solid var(--a1);outline-offset:0}
+  .send{width:46px;height:46px;border-radius:50%;border:0;color:#fff;font-size:18px;background:linear-gradient(135deg,var(--a1),var(--a2));
+    box-shadow:0 6px 16px color-mix(in srgb,var(--a1) 40%,transparent)}
+  .send:disabled{opacity:.5;cursor:not-allowed}
+  button:focus-visible{outline:2px solid var(--a1);outline-offset:2px}
+  @media (max-width:560px){ .msg{max-width:86%} header,.bar,#log,form{padding-left:14px;padding-right:14px} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">✦</div>
+    <div class="ttl"><h1>Tanya AI</h1><div class="sub" id="sub">Model: -</div></div>
+    <button class="ghost" id="reset" type="button" style="height:38px">Chat baru</button>
+  </header>
+  <div class="bar">
+    <label class="field"><span>Nama</span><input id="name" maxlength="40" placeholder="Nama kamu" autocomplete="given-name"></label>
+    <label class="field"><span>Model</span><select id="model"><option value="auto-FREE">auto-FREE</option></select></label>
+  </div>
+  <main id="log" aria-live="polite"></main>
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Tulis pesan…" aria-label="Pesan"></textarea>
+    <button class="send" id="send" type="submit" aria-label="Kirim">➤</button>
+  </form>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const log = $("log"), input = $("input"), send = $("send"), nameEl = $("name"), modelSel = $("model"), sub = $("sub");
+  let history = [];
+
+  function store(k, v){ try{ if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }catch(e){ return null; } }
+  nameEl.value = store("ai_name") || "";
+
+  function hero(){
+    const n = nameEl.value.trim();
+    log.innerHTML = "";
+    const h = document.createElement("div");
+    h.className = "hero";
+    h.innerHTML = '<div class="logo">✦</div><h2></h2><p>Mau ngobrol atau tanya apa hari ini?</p><div class="chips"></div>';
+    h.querySelector("h2").textContent = n ? "Halo, " + n + "!" : "Halo!";
+    ["Jelaskan konsep dengan sederhana", "Bantu aku menulis email", "Buatkan ide konten", "Perbaiki kode program"].forEach(t => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = t;
+      b.onclick = () => { input.value = t + ": "; input.focus(); };
+      h.querySelector(".chips").appendChild(b);
+    });
+    log.appendChild(h);
+  }
+
+  function add(role, text, html){
+    const hero = log.querySelector(".hero"); if (hero) hero.remove();
+    const row = document.createElement("div"); row.className = "row " + role;
+    const av = document.createElement("div"); av.className = "av";
+    av.textContent = role === "user" ? ((nameEl.value.trim()[0] || "K").toUpperCase()) : "✦";
+    const m = document.createElement("div"); m.className = "msg";
+    if (html) m.innerHTML = html; else m.textContent = text;
+    row.append(av, m); log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+    return row;
+  }
+
+  async function ask(){
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = ""; input.style.height = "auto";
+    history.push({ role: "user", content: text });
+    add("user", text);
+    const pending = add("ai", "", '<span class="dots"><span></span><span></span><span></span></span>');
+    send.disabled = true;
+    try {
+      const r = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history, model: modelSel.value, name: nameEl.value.trim() })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Terjadi kesalahan.");
+      const reply = data.reply || "(jawaban kosong)";
+      pending.querySelector(".msg").textContent = reply;
+      history.push({ role: "assistant", content: reply });
+    } catch (e) {
+      pending.classList.replace("ai", "err");
+      pending.querySelector(".msg").textContent = e.message + " Coba kirim ulang atau ganti model.";
+      history.pop();
+    } finally {
+      send.disabled = false; input.focus(); log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  fetch("/api/models").then(r => r.json()).then(d => {
+    if (!d.models || !d.models.length) return;
+    modelSel.innerHTML = "";
+    const groups = {};
+    d.models.forEach(m => {
+      if (!groups[m.group]) { groups[m.group] = document.createElement("optgroup"); groups[m.group].label = m.group; modelSel.appendChild(groups[m.group]); }
+      const o = document.createElement("option");
+      o.value = m.id; o.textContent = m.label; o.disabled = !m.available;
+      groups[m.group].appendChild(o);
+    });
+    const saved = store("ai_model");
+    const ok = [...modelSel.options].find(o => o.value === saved && !o.disabled);
+    modelSel.value = ok ? saved : "auto-FREE";
+    sub.textContent = "Model: " + modelSel.value;
+  }).catch(() => {});
+
+  modelSel.addEventListener("change", () => { store("ai_model", modelSel.value); sub.textContent = "Model: " + modelSel.value; });
+  nameEl.addEventListener("input", () => { store("ai_name", nameEl.value); if (log.querySelector(".hero")) hero(); });
+  $("form").addEventListener("submit", (e) => { e.preventDefault(); ask(); });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); ask(); } });
+  input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; });
+  $("reset").addEventListener("click", () => { history = []; hero(); });
+  sub.textContent = "Model: " + modelSel.value;
+  hero();
+</script>
+</body>
+</html>

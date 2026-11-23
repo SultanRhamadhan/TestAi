@@ -1,0 +1,7 @@
+{
+  "name": "bankai-ai-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chat AI sederhana memakai BankAI (OpenAI-compatible) dan siap deploy ke Vercel",
+  "engines": { "node": ">=18" }
+}
